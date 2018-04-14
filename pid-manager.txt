@@ -1,81 +1,86 @@
-#include<stdio.h>
-#include<conio.h>
-const int MIN_PID = 300;
-const int MAX_PID = 5000;
-int pid[4700];
 
-int main()
-{  int z;
-   allocateMap();
-   printf("Allocate PID : %d\n",allocatePID());
-   printf("Allocate PID : %d\n",allocatePID());
-   printf("Releasing PID : 300\n");
-   releasPID(300);
-   printf("Allocate PID : %d\n",allocatePID());
-   getch();
+#include<assert.h>
+#include<stdio.h>
+#include<pthread.h>
+#include<time.h>
+
+#define MIN_PID 100
+#define MAX_PID 1000
+
+pthread_mutex_t _mutexLock;
+
+struct process {
+	int _pid,_isAllocated;
+}_array[MAX_PID-MIN_PID];
+
+int allocate_map() {
+	int i=MIN_PID;
+	while(i<=MAX_PID) {
+		_array[i-MIN_PID]._pid=i;
+		_array[i-MIN_PID]._isAllocated=0;
+		i++;
+	}
+	return 1;
 }
-    
-int allocateMap()
-{   
-   int i;
-   if(pid == NULL)
-       return -1; 
-   //sets all pid to 0, which indicates the process if of i is available
-   
-   for(i=0; i<(MAX_PID-MIN_PID); i++)
-   {
-   pid[i] = 0;
-   } 
-   return 1;
+
+int allocate_pid() {
+	int i=0;
+	while(i<MAX_PID) {
+		if (_array[i]._isAllocated==0) {
+			pthread_mutex_lock(&_mutexLock);
+			_array[i]._isAllocated=1;
+			pthread_mutex_unlock(&_mutexLock);
+			return _array[i]._pid;
+		}
+		i++;
+	}
+	return -1;
 }
-     
-int allocatePID()
-{      
-   if(pid ==NULL)
-   {
-   printf("PID Manager is not initialized ");
-   return -1;
-   } 
-   //pidNum is used to determine if the pid was allocate
-   int pidNum =-1;
-   //Sets values to 1 to indicate the pid is currently in use.
-   int i;
-   for(i=0; i<(MAX_PID-MIN_PID); i++)
-   {        
-        if(pid[i] == 0)
-		{
-        pid[i] = 1;
-        //Adds value to pidNum to determine for loop was executed.
-        pidNum = i + MIN_PID;
-        break;
-        }
-   }  
-   //If for loop was not executed, prints error
-   if(pidNum == -1)
-   {
-   printf("Unable to allocate PID");
-   } 
-   return pidNum;
+
+void release_pid(int _pid) {
+	int i=0;
+	while(i<MAX_PID) {
+		if(_array[i]._pid==_pid) {
+			int _res=pthread_mutex_lock(&_mutexLock);
+			assert(_res==0);
+			_array[i]._isAllocated=0;
+			_res=pthread_mutex_unlock(&_mutexLock);
+			break;
+		}
+		i++;
+	}
 }
-     
-int releasPID(int pidNum)
-{     
-   if(pid == NULL)
-   {
-   printf("PID Manager is not initialized ");
-   return;
-   }
-     
-   if(pidNum < MIN_PID || pidNum > MAX_PID){
-   printf("Given PID is out or Range");
-   }
-     
-   int newPid = pidNum - MIN_PID;
-     
-   if(pid[newPid] == 0){
-   printf("PID %d is already released ",newPid);
-   return;
-   }
-     
-   pid[newPid]=0;
+
+void* processFunc(void *_args) {
+	int _pid=allocate_pid();
+	printf("New process created : %d\n",_pid);
+	int _time=(rand()+20)%(40+1);
+	
+	release_pid(_pid);
+	printf("Process destroyed : %d\n",_pid);
+}
+
+void createProcess() {
+	int i=0;
+	pthread_t _arrayPid[15];
+	if(pthread_mutex_init(&_mutexLock,NULL)!=0)
+		printf("Mutex init.");
+	while(i<15) {
+		pthread_create(&_arrayPid[i],NULL,processFunc,NULL);
+		
+		i++;
+	}
+	
+	i=0;
+	while(i<15) {
+		pthread_join(_arrayPid[i],NULL);
+		i++;
+	}	
+}
+
+int main() {
+	if(allocate_map()) {
+		srand(time(0));
+		createProcess();
+	}
 }
